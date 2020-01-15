@@ -1476,6 +1476,12 @@ def atanh(x):
   r"""Elementwise inverse hyperbolic tangent: :math:`\mathrm{atanh}(x)`."""
   return atanh_p.bind(x)
 
+# Define arcsinh (asinh) as a primitive for differentiation stability.
+@api.jit
+@_upcast_fp16_for_computation
+def asinh(x):
+  return asinh_p.bind(x)
+
 
 # Add some methods to ShapedArray that rely on lax primitives
 
@@ -1695,6 +1701,9 @@ ad.defjvp(sin_p, lambda g, x: mul(g, cos(x)))
 cos_p = standard_unop(_float | _complex, 'cos')
 ad.defjvp(cos_p, lambda g, x: neg(mul(g, sin(x))))
 
+asinh_p = standard_unop(_float | _complex, 'asinh')
+ad.defjvp(asinh_p, lambda g, x: g / sqrt(_const(x, 1) + square(x)))
+
 atan2_p = standard_naryop([_float, _float], 'atan2')
 ad.defjvp(atan2_p,
   lambda g, x, y: _brcast(g, y) * (y / (square(x) + square(y))),
@@ -1853,7 +1862,9 @@ xor_p = standard_naryop([_bool_or_int, _bool_or_int], 'xor')
 ad.defjvp_zero(xor_p)
 
 def _add_transpose(t, x, y):
-  # assert ad.is_undefined_primal(x) and ad.is_undefined_primal(y)  # not affine
+  # The following linearity assertion is morally true, but because in some cases we
+  # instantiate zeros for convenience, it doesn't always hold.
+  # assert ad.is_undefined_primal(x) and ad.is_undefined_primal(y)
   return [t, t]
 
 add_p = standard_naryop([_num, _num], 'add')
@@ -1862,7 +1873,9 @@ ad.primitive_transposes[add_p] = _add_transpose
 
 
 def _sub_transpose(t, x, y):
-  assert ad.is_undefined_primal(x) and ad.is_undefined_primal(y)
+  # The following linearity assertion is morally true, but because in some cases
+  # we instantiate zeros for convenience, it doesn't always hold.
+  # assert ad.is_undefined_primal(x) and ad.is_undefined_primal(y)
   return [t, neg(t) if t is not ad_util.zero else ad_util.zero]
 
 sub_p = standard_naryop([_num, _num], 'sub')
